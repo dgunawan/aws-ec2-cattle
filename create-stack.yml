@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  TargetStackName:
+    Description: The name of the stack to be created
+    Type: String
+  TargetS3Bucket:
+    Description: The name os the S3 bucket
+    Type: String
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CreateLambda}
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogGroups
+            Resource: arn:aws:logs:*:*:*
+          
+          - Effect: Allow
+            Action:
+              - cloudformation:CreateStack
+              - cloudformation:DeleteStack
+            Resource: "*"
+          
+          - Effect: Allow
+            Action: 
+              - iam:CreateRole
+              - iam:DeleteRolePolicy
+              - iam:DeleteRole
+              - iam:PutRolePolicy
+              - iam:GetRolePolicy
+              - iam:GetRole
+              - iam:PassRole
+            Resource: "*"
+          
+          - Effect: Allow
+            Action: 
+              - lambda:*
+            Resource: "*"
+
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+            Resource: arn:aws:s3:::*
+
+          - Effect: Allow
+            Action:
+              - events:RemoveTargets
+              - events:DeleteRule
+            Resource: "*"
+          
+          - Effect: Allow
+            Action:
+              - ec2:TerminateInstances
+              - ec2:DescribeInstances 
+              - ec2:RunInstances 
+            Resource: "*"
+
+  CreateLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          def handler(event, context):
+            cf_client = boto3.client('cloudformation')
+            cf_client.create_stack(
+                StackName='Test',
+                TemplateURL='http://s3.amazonaws.com/318-auto-deploy/LambdaAMILookupSample-win.yml',
+                Capabilities=[
+                  'CAPABILITY_IAM'
+                ]
+            )
+
+      Runtime: python3.6
+      Environment:
+        Variables:
+          vTargetStackName: !Ref TargetStackName
+          vTargetS3Bucket: !Ref TargetS3Bucket
+
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Ref: "CreateLambda"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "CreateRule"
+          - "Arn"      
+          
+  CreateRule:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "ScheduledRule"
+      ScheduleExpression: "cron(0/5 * * * ? *)"
+      State: "ENABLED"
+      Targets: 
+        - 
+          Arn: 
+            Fn::GetAtt: 
+              - "CreateLambda"
+              - "Arn"
+          Id: "CreateLambdaV1"
+          Input: !Sub
+          - "{\"StackName\": \"${Stack}\"}"
+          - { Stack: !Ref "TargetStackName" }       
