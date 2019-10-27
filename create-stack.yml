@@ -1,14 +1,22 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
 Parameters:
-  TargetStackName:
-    Description: The name of the stack to be created
+  AutoEC2StackName:
+    Description: The name of the EC2 stack to be created
     Type: String
-    Default: Test
-  TargetS3Bucket:
-    Description: The name os the S3 bucket
+    Default: auto-ec2-stack
+  AutoEC2S3Bucket:
+    Description: The name of the S3 bucket for the EC2 stack
     Type: String
     Default: http://s3.amazonaws.com/318-auto-deploy/LambdaAMILookupSample-win.yml
+  RemoveLambdaStackName:
+    Description: The name of the remove Lambda stack to be created
+    Type: String
+    Default: remove-stack
+  RemoveLambdaS3Bucket:
+    Description: The name of the S3 bucket for the remove Lambda
+    Type: String
+    Default: http://s3.amazonaws.com/318-auto-deploy/destroy-stack.yml
 
 Resources:
   LogGroup:
@@ -93,8 +101,10 @@ Resources:
       Runtime: python3.6
       Environment:
         Variables:
-          vTargetStackName: !Ref TargetStackName
-          vTargetS3Bucket: !Ref TargetS3Bucket
+          vAutoEC2StackName: !Ref AutoEC2StackName
+          vAutoEC2S3Bucket: !Ref AutoEC2S3Bucket
+          vRemoveLambdaStackName: !Ref RemoveLambdaStackName
+          vRemoveLambdaS3Bucket: !Ref RemoveLambdaS3Bucket
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -108,23 +118,23 @@ Resources:
           cf_client = boto3.client('cloudformation')
 
           def handler(event, context):
-            print("Creating stack: " + os.environ['vTargetStackName'])
+            print("Creating automated EC2 stack:" + os.environ['vAutoEC2StackName'])
             cf_client.create_stack(
-                StackName=os.environ['vTargetStackName'],
-                TemplateURL=os.environ['vTargetS3Bucket'],
+                StackName = os.environ['vAutoEC2StackName'],
+                TemplateURL = os.environ['vAutoEC2S3Bucket'],
                 Capabilities=['CAPABILITY_IAM']
             )
 
-            print("Creating destoyer stack")
+            print("Creating destoyer stack:" + os.environ['vRemoveLambdaStackName'])
             cf_client.create_stack(
-                StackName='destroy-stack',
-                TemplateURL='http://s3.amazonaws.com/318-auto-deploy/destroy-stack.yml',
+                StackName = os.environ['vRemoveLambdaStackName'],
+                TemplateURL = os.environ['vRemoveLambdaS3Bucket'],
                 Capabilities=['CAPABILITY_IAM'],
                 Parameters=
                 [
                   {
                       'ParameterKey': 'TargetStackName',
-                      'ParameterValue': os.environ['vTargetStackName'],
+                      'ParameterValue': os.environ['vAutoEC2StackName'],
                       'UsePreviousValue': False,
                       'ResolvedValue': 'string'
                   },
@@ -140,13 +150,13 @@ Resources:
       Principal: "events.amazonaws.com"
       SourceArn: 
         Fn::GetAtt: 
-          - "CreateRule"
+          - "CreateLambdaRule"
           - "Arn"      
           
-  CreateRule:
+  CreateLambdaRule:
     Type: AWS::Events::Rule
     Properties: 
-      Description: "ScheduledRule"
+      Description: "Rule for the Lambda to schedule create and delete EC2"
       ScheduleExpression: "cron(0/5 * * * ? *)"
       State: "ENABLED"
       Targets: 
@@ -158,4 +168,4 @@ Resources:
           Id: "CreateLambdaV1"
           Input: !Sub
           - "{\"StackName\": \"${Stack}\"}"
-          - { Stack: !Ref "TargetStackName" }       
+          - { Stack: !Ref "AutoEC2StackName" }       
