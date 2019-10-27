@@ -40,6 +40,7 @@ Resources:
               - logs:CreateLogStream
               - logs:PutLogEvents
               - logs:DescribeLogGroups
+              - logs:DeleteLogGroup 
             Resource: arn:aws:logs:*:*:*
           
           - Effect: Allow
@@ -74,6 +75,9 @@ Resources:
             Action:
               - events:RemoveTargets
               - events:DeleteRule
+              - events:PutRule 
+              - events:DescribeRule
+              - events:PutTargets 
             Resource: "*"
           
           - Effect: Allow
@@ -110,7 +114,23 @@ Resources:
                 TemplateURL=os.environ['vTargetS3Bucket'],
                 Capabilities=['CAPABILITY_IAM']
             )
-               
+
+            print("Creating destoyer stack")
+            cf_client.create_stack(
+                StackName='destroy-stack',
+                TemplateURL='http://s3.amazonaws.com/318-auto-deploy/destroy-stack.yml',
+                Capabilities=['CAPABILITY_IAM'],
+                Parameters=
+                [
+                  {
+                      'ParameterKey': 'TargetStackName',
+                      'ParameterValue': os.environ['vTargetStackName'],
+                      'UsePreviousValue': False,
+                      'ResolvedValue': 'string'
+                  },
+                ]
+            )
+
   PermissionForEventsToInvokeLambda: 
     Type: AWS::Lambda::Permission
     Properties: 
