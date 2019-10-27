@@ -65,23 +65,27 @@ Resources:
   HarakiriLambda:
     Type: AWS::Lambda::Function
     Properties:
+      Runtime: python3.6
+      Environment:
+        Variables:
+          vTargetStackName: !Ref TargetStackName
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
         ZipFile: |
           import boto3
           import os
-          
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          client = boto3.client('cloudformation')
+
           def handler(event, context):
-            client = boto3.client('cloudformation')
+            print("Deleting stack: " + os.environ['vTargetStackName'])
             return client.delete_stack(
                 StackName=os.environ['vTargetStackName']
             )
-
-      Runtime: python3.6
-      Environment:
-        Variables:
-          vTargetStackName: !Ref TargetStackName
 
   PermissionForEventsToInvokeLambda: 
     Type: AWS::Lambda::Permission

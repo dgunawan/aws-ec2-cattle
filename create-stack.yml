@@ -4,9 +4,11 @@ Parameters:
   TargetStackName:
     Description: The name of the stack to be created
     Type: String
+    Default: Test
   TargetS3Bucket:
     Description: The name os the S3 bucket
     Type: String
+    Default: http://s3.amazonaws.com/318-auto-deploy/LambdaAMILookupSample-win.yml
 
 Resources:
   LogGroup:
@@ -84,27 +86,31 @@ Resources:
   CreateLambda:
     Type: AWS::Lambda::Function
     Properties:
+      Runtime: python3.6
+      Environment:
+        Variables:
+          vTargetStackName: !Ref TargetStackName
+          vTargetS3Bucket: !Ref TargetS3Bucket
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
         ZipFile: |
           import boto3
           import os
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          cf_client = boto3.client('cloudformation')
 
           def handler(event, context):
-            cf_client = boto3.client('cloudformation')
+            print("Creating stack: " + os.environ['vTargetStackName'])
             cf_client.create_stack(
-                StackName='Test',
-                TemplateURL='http://s3.amazonaws.com/318-auto-deploy/LambdaAMILookupSample-win.yml',
+                StackName=os.environ['vTargetStackName'],
+                TemplateURL=os.environ['vTargetS3Bucket'],
                 Capabilities=['CAPABILITY_IAM']
             )
-
-      Runtime: python3.6
-      Environment:
-        Variables:
-          vTargetStackName: !Ref TargetStackName
-          vTargetS3Bucket: !Ref TargetS3Bucket
-
+               
   PermissionForEventsToInvokeLambda: 
     Type: AWS::Lambda::Permission
     Properties: 
