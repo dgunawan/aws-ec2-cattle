@@ -96,9 +96,7 @@ Resources:
             cf_client.create_stack(
                 StackName='Test',
                 TemplateURL='http://s3.amazonaws.com/318-auto-deploy/LambdaAMILookupSample-win.yml',
-                Capabilities=[
-                  'CAPABILITY_IAM'
-                ]
+                Capabilities=['CAPABILITY_IAM']
             )
 
       Runtime: python3.6

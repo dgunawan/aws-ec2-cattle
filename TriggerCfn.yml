@@ -1,8 +1,0 @@
-import boto3
-import os
-
-cf_client = boto3.client('cloudformation')
-cf_client.create_stack(
-    StackName=os.environ['your-stack'0,
-    TemplateURL=os.environ['https://s3.amazonaws.com/your-bucket/your-template']
-)
