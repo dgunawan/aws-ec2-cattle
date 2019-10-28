@@ -4,6 +4,9 @@ Parameters:
   TargetStackName:
     Description: The name of the stack to be destroyed
     Type: String
+  CronSchedule:
+    Description: Schedule when this will be run
+    Type: String
 
 Resources:
   LambdaExecutionRole:
@@ -62,7 +65,7 @@ Resources:
               - lambda:DeleteFunction
             Resource: "*"
 
-  HarakiriLambda:
+  RemoveLambda:
     Type: AWS::Lambda::Function
     Properties:
       Runtime: python3.6
@@ -91,27 +94,27 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties: 
       FunctionName: 
-        Ref: "HarakiriLambda"
+        Ref: "RemoveLambda"
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
       SourceArn: 
         Fn::GetAtt: 
-          - "HarakiriRule"
+          - "RemoveRule"
           - "Arn"      
           
-  HarakiriRule:
+  RemoveRule:
     Type: AWS::Events::Rule
     Properties: 
-      Description: "ScheduledRule"
-      ScheduleExpression: "cron(0/3 * * * ? *)"
+      Description: "Rule for the Lambda to schedule removing an EC2 stack"
+      ScheduleExpression: !Ref CronSchedule 
       State: "ENABLED"
       Targets: 
         - 
           Arn: 
             Fn::GetAtt: 
-              - "HarakiriLambda"
+              - "RemoveLambda"
               - "Arn"
-          Id: "HarakiriLambdaV1"
+          Id: "RemoveLambda"
           Input: !Sub
           - "{\"StackName\": \"${Stack}\"}"
           - { Stack: !Ref "TargetStackName" }       
@@ -119,18 +122,4 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${HarakiriLambda}
-
-Outputs:
-  StackRegion:
-    Value:
-      Ref: "AWS::Region"
-  AccountId:
-    Value:
-      Ref: "AWS::AccountId"
-  StackId:
-    Value:
-      Ref: "AWS::StackId"
-  StackName:
-    Value:
-      Ref: "AWS::StackName"                  
+      LogGroupName: !Sub /aws/lambda/${RemoveLambda}           

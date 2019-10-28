@@ -1,3 +1,5 @@
+# boto3 examples https://www.programcreek.com/python/example/97943/boto3.client
+
 AWSTemplateFormatVersion: "2010-09-09"
 
 Parameters:
@@ -17,6 +19,10 @@ Parameters:
     Description: The name of the S3 bucket for the remove Lambda
     Type: String
     Default: http://s3.amazonaws.com/318-auto-deploy/destroy-stack.yml
+  RemoveLambdaCronSchedule:
+    Description: The name of the S3 bucket for the remove Lambda
+    Type: String
+    Default: cron(0/20 * * * ? *)
 
 Resources:
   LogGroup:
@@ -105,6 +111,7 @@ Resources:
           vAutoEC2S3Bucket: !Ref AutoEC2S3Bucket
           vRemoveLambdaStackName: !Ref RemoveLambdaStackName
           vRemoveLambdaS3Bucket: !Ref RemoveLambdaS3Bucket
+          vRemoveLambdaCronSchedule: !Ref RemoveLambdaCronSchedule
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -138,6 +145,12 @@ Resources:
                       'UsePreviousValue': False,
                       'ResolvedValue': 'string'
                   },
+                  {
+                      'ParameterKey': 'CronSchedule',
+                      'ParameterValue': os.environ['vRemoveLambdaCronSchedule'],
+                      'UsePreviousValue': False,
+                      'ResolvedValue': 'string'
+                  },
                 ]
             )
 
@@ -157,7 +170,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties: 
       Description: "Rule for the Lambda to schedule create and delete EC2"
-      ScheduleExpression: "cron(0/5 * * * ? *)"
+      ScheduleExpression: "cron(0/15 * * * ? *)"
       State: "ENABLED"
       Targets: 
         - 
