@@ -61,6 +61,7 @@ Resources:
             Action:
               - cloudformation:CreateStack
               - cloudformation:DeleteStack
+              - cloudformation:DescribeStacks
             Resource: "*"
           
           - Effect: Allow
@@ -119,41 +120,52 @@ Resources:
           import boto3
           import os
           import logging
+          import botocore
 
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
           cf_client = boto3.client('cloudformation')
 
           def handler(event, context):
-            print("Creating automated EC2 stack:" + os.environ['vAutoEC2StackName'])
-            cf_client.create_stack(
-                StackName = os.environ['vAutoEC2StackName'],
-                TemplateURL = os.environ['vAutoEC2S3Bucket'],
-                Capabilities=['CAPABILITY_IAM']
-            )
+            try:
+                resp = cf_client.describe_stacks(StackName = os.environ['vAutoEC2StackName'])
+                print("Stack already existed:" + os.environ['vAutoEC2StackName'])
+            except botocore.exceptions.ClientError as e:
+                if 'does not exist' in e.response['Error']['Message']:
+                  print("Creating automated EC2 stack:" + os.environ['vAutoEC2StackName'])
+                  cf_client.create_stack(
+                      StackName = os.environ['vAutoEC2StackName'],
+                      TemplateURL = os.environ['vAutoEC2S3Bucket'],
+                      Capabilities=['CAPABILITY_IAM']
+                  )
 
-            print("Creating destoyer stack:" + os.environ['vRemoveLambdaStackName'])
-            cf_client.create_stack(
-                StackName = os.environ['vRemoveLambdaStackName'],
-                TemplateURL = os.environ['vRemoveLambdaS3Bucket'],
-                Capabilities=['CAPABILITY_IAM'],
-                Parameters=
-                [
-                  {
-                      'ParameterKey': 'TargetStackName',
-                      'ParameterValue': os.environ['vAutoEC2StackName'],
-                      'UsePreviousValue': False,
-                      'ResolvedValue': 'string'
-                  },
-                  {
-                      'ParameterKey': 'CronSchedule',
-                      'ParameterValue': os.environ['vRemoveLambdaCronSchedule'],
-                      'UsePreviousValue': False,
-                      'ResolvedValue': 'string'
-                  },
-                ]
-            )
-
+            try:
+                resp = cf_client.describe_stacks(StackName = os.environ['vRemoveLambdaStackName'])
+                print("Stack already existed:" + os.environ['vRemoveLambdaStackName'])      
+            except botocore.exceptions.ClientError as e:
+                if 'does not exist' in e.response['Error']['Message']:
+                  print("Creating destoyer stack:" + os.environ['vRemoveLambdaStackName'])
+                  cf_client.create_stack(
+                      StackName = os.environ['vRemoveLambdaStackName'],
+                      TemplateURL = os.environ['vRemoveLambdaS3Bucket'],
+                      Capabilities=['CAPABILITY_IAM'],
+                      Parameters=
+                      [
+                        {
+                            'ParameterKey': 'TargetStackName',
+                            'ParameterValue': os.environ['vAutoEC2StackName'],
+                            'UsePreviousValue': False,
+                            'ResolvedValue': 'string'
+                        },
+                        {
+                            'ParameterKey': 'CronSchedule',
+                            'ParameterValue': os.environ['vRemoveLambdaCronSchedule'],
+                            'UsePreviousValue': False,
+                            'ResolvedValue': 'string'
+                        },
+                      ]
+                    )
+                
   PermissionForEventsToInvokeLambda: 
     Type: AWS::Lambda::Permission
     Properties: 
