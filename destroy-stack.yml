@@ -33,6 +33,7 @@ Resources:
               - logs:CreateLogStream
               - logs:PutLogEvents
               - logs:DeleteLogGroup
+              - logs:PutRetentionPolicy
             Resource: arn:aws:logs:*:*:*
           
           - Effect: Allow
@@ -72,6 +73,7 @@ Resources:
       Environment:
         Variables:
           vTargetStackName: !Ref TargetStackName
+          vOwnStackName: !Ref AWS::StackName
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -85,10 +87,19 @@ Resources:
           client = boto3.client('cloudformation')
 
           def handler(event, context):
-            print("Deleting stack: " + os.environ['vTargetStackName'])
-            return client.delete_stack(
-                StackName=os.environ['vTargetStackName']
-            )
+            try:
+              print("Deleting EC2 stack: " + os.environ['vTargetStackName'])
+              client.delete_stack(
+                  StackName=os.environ['vTargetStackName']
+              )
+
+              print("Deleting itself: " + os.environ['vOwnStackName'])
+              client.delete_stack(
+                  StackName=os.environ['vOwnStackName']
+              )
+              return "SUCCESS"
+            except:
+              return "ERROR"
 
   PermissionForEventsToInvokeLambda: 
     Type: AWS::Lambda::Permission
@@ -122,4 +133,5 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
+      RetentionInDays: 1
       LogGroupName: !Sub /aws/lambda/${RemoveLambda}           
