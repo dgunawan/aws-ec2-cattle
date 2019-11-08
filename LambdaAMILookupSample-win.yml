@@ -118,6 +118,7 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
+      RetentionInDays: 1
       LogGroupName: !Sub /aws/lambda/${AMIInfoFunction}
 
   LambdaExecutionRole:
@@ -141,7 +142,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
-                  - logs:PutLogEvents                  
+                  - logs:PutLogEvents    
+                  - logs:PutRetentionPolicy              
                 Resource: arn:aws:logs:*:*:*
               - Effect: Allow
                 Action:
