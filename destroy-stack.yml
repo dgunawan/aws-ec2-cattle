@@ -87,23 +87,10 @@ Resources:
           client = boto3.client('cloudformation')
 
           def handler(event, context):
-            try:
-              print("Deleting EC2 stack: " + os.environ['vTargetStackName'])
-              client.delete_stack(
-                  StackName = os.environ['vTargetStackName']
-              )
-
-              print("Deleting itself: " + os.environ['vOwnStackName'])
-              client.delete_stack(
-                  StackName=os.environ['vOwnStackName']
-              )
-
-              client.delete_log_group(
-                  logGroupName = 'aws/lambda/destroy-DecommLambda*'
-              )
-              return "SUCCESS"
-            except:
-              return "ERROR"
+            print("Deleting EC2 stack: " + os.environ['vTargetStackName'])
+            return client.delete_stack(
+                StackName = os.environ['vTargetStackName']
+            )
 
   PermissionForEventsToInvokeLambda: 
     Type: AWS::Lambda::Permission
@@ -114,10 +101,10 @@ Resources:
       Principal: "events.amazonaws.com"
       SourceArn: 
         Fn::GetAtt: 
-          - "RemoveRule"
+          - "DecommRule"
           - "Arn"      
           
-  RemoveRule:
+  DecommRule:
     Type: AWS::Events::Rule
     Properties: 
       Description: "Rule for the Lambda decommisioning EC2 stack"
@@ -135,3 +122,4 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${DecommLambda}    
+      RetentionInDays: 1
