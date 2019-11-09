@@ -2,28 +2,29 @@
 # an EC2 resource including the Lambda that manages the removal itself
 # boto3 examples https://www.programcreek.com/python/example/97943/boto3.client
 # EventBridge: https://aws.amazon.com/eventbridge/faqs/
+# https://dev.to/guneysus/developing-a-self-destructing-cloudformation-stack-2ka2
 
 AWSTemplateFormatVersion: "2010-09-09"
 
 Parameters:
-  CreateEC2StackName:
-    Description: Name of the EC2 stack to be created
+  ProvEC2CfnStackName:
+    Description: Name of the EC2 Cfn stack for provisioning the EC2 instance
     Type: String
-    Default: create-ec2-stack
-  CreateEC2SCloudFormation:
-    Description: Name of the CloudFormation template for EC2 creation
+    Default: prov-ec2-stack
+  ProvEC2CfnTemplateName:
+    Description: Name of the EC2 Cfn template for provisioning the EC2 instance
     Type: String
     Default: LambdaAMILookupSample-win.yml
-  RemoveLambdaStackName:
-    Description: Name of the remove Lambda stack to be created
+  DecommEC2CfnStackName:
+    Description: Name of the EC2 Cfn stack for decommisioning the EC2 instance
     Type: String
-    Default: remove-stack
-  RemoveLambdaS3CloudFormation:
-    Description: Name of the S3 bucket for the remove Lambda
+    Default: decomm-ec2-stack
+  DecommEC2CfnTemplateName:
+    Description: Name of the EC2 Cfn template for decommisioning the EC2 instance
     Type: String
     Default: destroy-stack.yml
-  RemoveLambdaCronSchedule:
-    Description: Schedule for the remove-lambda
+  DecommCronSchedule:
+    Description: Schedule for the delete-lambda
     Type: String
     Default: cron(0/20 * * * ? *)
   CfnStackS3BucketName:
@@ -32,12 +33,6 @@ Parameters:
     Default: http://s3.amazonaws.com/318-auto-deploy
 
 Resources:
-  LogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      RetentionInDays: 30
-      LogGroupName: !Sub /aws/lambda/${CreateLambda}
-
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -52,7 +47,7 @@ Resources:
           - sts:AssumeRole
       Path: "/"
       Policies:
-      - PolicyName: root
+      - PolicyName: create_ec2_lambda_policy
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -111,17 +106,17 @@ Resources:
               - ec2:RunInstances 
             Resource: "*"
 
-  CreateLambda:
+  ManageEC2Lambda:
     Type: AWS::Lambda::Function
     Properties:
       Runtime: python3.6
       Environment:
         Variables:
-          vCreateEC2StackName: !Ref CreateEC2StackName
-          vCreateEC2SCloudFormation: !Join ['/', [!Ref CfnStackS3BucketName, !Ref CreateEC2SCloudFormation]]
-          vRemoveLambdaStackName: !Ref RemoveLambdaStackName
-          vRemoveLambdaS3CloudFormation: !Join ['/', [!Ref CfnStackS3BucketName, !Ref RemoveLambdaS3CloudFormation]]
-          vRemoveLambdaCronSchedule: !Ref RemoveLambdaCronSchedule
+          vProvEC2CfnStackName: !Ref ProvEC2CfnStackName
+          vProvEC2CfnTemplateName: !Join ['/', [!Ref CfnStackS3BucketName, !Ref ProvEC2CfnTemplateName]]
+          vDecommEC2CfnStackName: !Ref DecommEC2CfnStackName
+          vDecommEC2CfnTemplateName: !Join ['/', [!Ref CfnStackS3BucketName, !Ref DecommEC2CfnTemplateName]]
+          vDecommCronSchedule: !Ref DecommCronSchedule
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -137,69 +132,72 @@ Resources:
 
           def handler(event, context):
             try:
-                resp = cf_client.describe_stacks(StackName = os.environ['vCreateEC2StackName'])
-                print("Stack already existed:" + os.environ['vCreateEC2StackName'])
+                resp = cf_client.describe_stacks(StackName = os.environ['vProvEC2CfnStackName'])
+                print("Stack already existed:" + os.environ['vProvEC2CfnStackName'])
             except botocore.exceptions.ClientError as e:
                 if 'does not exist' in e.response['Error']['Message']:
-                  print("Creating automated EC2 stack:" + os.environ['vCreateEC2StackName'])
+                  print("Creating provisioning EC2 stack:" + os.environ['vProvEC2CfnStackName'])
                   cf_client.create_stack(
-                      StackName = os.environ['vCreateEC2StackName'],
-                      TemplateURL = os.environ['vCreateEC2SCloudFormation'],
-                      Capabilities=['CAPABILITY_IAM']
+                      StackName = os.environ['vProvEC2CfnStackName'],
+                      TemplateURL = os.environ['vProvEC2CfnTemplateName'],
+                      Capabilities = ['CAPABILITY_IAM']
                   )
 
             try:
-                resp = cf_client.describe_stacks(StackName = os.environ['vRemoveLambdaStackName'])
-                print("Stack already existed:" + os.environ['vRemoveLambdaStackName'])      
+                resp = cf_client.describe_stacks(StackName = os.environ['vDecommEC2CfnStackName'])
+                print("Stack already existed:" + os.environ['vDecommEC2CfnStackName'])      
             except botocore.exceptions.ClientError as e:
                 if 'does not exist' in e.response['Error']['Message']:
-                  print("Creating destoyer stack:" + os.environ['vRemoveLambdaStackName'])
+                  print("Creating decommisioning stack:" + os.environ['vDecommEC2CfnStackName'])
                   cf_client.create_stack(
-                      StackName = os.environ['vRemoveLambdaStackName'],
-                      TemplateURL = os.environ['vRemoveLambdaS3CloudFormation'],
-                      Capabilities=['CAPABILITY_IAM'],
+                      StackName = os.environ['vDecommEC2CfnStackName'],
+                      TemplateURL = os.environ['vDecommEC2CfnTemplateName'],
+                      Capabilities = ['CAPABILITY_IAM'],
                       Parameters=
                       [
                         {
                             'ParameterKey': 'TargetStackName',
-                            'ParameterValue': os.environ['vCreateEC2StackName'],
+                            'ParameterValue': os.environ['vProvEC2CfnStackName'],
                             'UsePreviousValue': False,
                             'ResolvedValue': 'string'
                         },
                         {
                             'ParameterKey': 'CronSchedule',
-                            'ParameterValue': os.environ['vRemoveLambdaCronSchedule'],
+                            'ParameterValue': os.environ['vDecommCronSchedule'],
                             'UsePreviousValue': False,
                             'ResolvedValue': 'string'
                         },
                       ]
                     )
-                
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 1
+      LogGroupName: !Sub /aws/lambda/${ManageEC2Lambda} 
+
   PermissionForEventsToInvokeLambda: 
     Type: AWS::Lambda::Permission
     Properties: 
       FunctionName: 
-        Ref: "CreateLambda"
+        Ref: "ManageEC2Lambda"
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
       SourceArn: 
         Fn::GetAtt: 
-          - "CreateLambdaRule"
+          - "ManageEC2LambdaRule"
           - "Arn"      
           
-  CreateLambdaRule:
+  ManageEC2LambdaRule:
     Type: AWS::Events::Rule
     Properties: 
-      Description: "Rule for the Lambda to schedule create and delete EC2"
+      Description: "Rule for Lambda that schedules provisioning and decommisioning of EC2"
       ScheduleExpression: "cron(0/15 * * * ? *)"
       State: "ENABLED"
       Targets: 
         - 
           Arn: 
             Fn::GetAtt: 
-              - "CreateLambda"
+              - "ManageEC2Lambda"
               - "Arn"
-          Id: "CreateLambdaV1"
-          Input: !Sub
-          - "{\"StackName\": \"${Stack}\"}"
-          - { Stack: !Ref "CreateEC2StackName" }       
+          Id: "ManageEC2LambdaV1"    

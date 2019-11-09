@@ -103,8 +103,8 @@ Resources:
     Type: 'AWS::Lambda::Function'
     Properties:
       Code:
-        S3Bucket: '318-auto-deploy'
-        S3Key: 'amilookup-win.zip'
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
       Handler: !Join 
         - ''
         - - !Ref ModuleName

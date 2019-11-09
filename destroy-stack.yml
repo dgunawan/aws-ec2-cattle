@@ -66,7 +66,7 @@ Resources:
               - lambda:DeleteFunction
             Resource: "*"
 
-  RemoveLambda:
+  DecommLambda:
     Type: AWS::Lambda::Function
     Properties:
       Runtime: python3.6
@@ -90,12 +90,16 @@ Resources:
             try:
               print("Deleting EC2 stack: " + os.environ['vTargetStackName'])
               client.delete_stack(
-                  StackName=os.environ['vTargetStackName']
+                  StackName = os.environ['vTargetStackName']
               )
 
               print("Deleting itself: " + os.environ['vOwnStackName'])
               client.delete_stack(
                   StackName=os.environ['vOwnStackName']
+              )
+
+              client.delete_log_group(
+                  logGroupName = 'aws/lambda/destroy-DecommLambda*'
               )
               return "SUCCESS"
             except:
@@ -105,7 +109,7 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties: 
       FunctionName: 
-        Ref: "RemoveLambda"
+        Ref: "DecommLambda"
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
       SourceArn: 
@@ -116,22 +120,18 @@ Resources:
   RemoveRule:
     Type: AWS::Events::Rule
     Properties: 
-      Description: "Rule for the Lambda to schedule removing an EC2 stack"
+      Description: "Rule for the Lambda decommisioning EC2 stack"
       ScheduleExpression: !Ref CronSchedule 
       State: "ENABLED"
       Targets: 
         - 
           Arn: 
             Fn::GetAtt: 
-              - "RemoveLambda"
+              - "DecommLambda"
               - "Arn"
-          Id: "RemoveLambda"
-          Input: !Sub
-          - "{\"StackName\": \"${Stack}\"}"
-          - { Stack: !Ref "TargetStackName" }       
+          Id: "DecommLambdaV1"
           
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      RetentionInDays: 1
-      LogGroupName: !Sub /aws/lambda/${RemoveLambda}           
+      LogGroupName: !Sub /aws/lambda/${DecommLambda}    
