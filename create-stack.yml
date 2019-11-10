@@ -131,13 +131,12 @@ Resources:
           cf_client = boto3.client('cloudformation')
 
           def handler(event, context):
-            # 
             try:
                 resp = cf_client.describe_stacks(StackName = os.environ['vProvEC2CfnStackName'])
                 print("Stack already existed:" + os.environ['vProvEC2CfnStackName'])
             except botocore.exceptions.ClientError as e:
                 if 'does not exist' in e.response['Error']['Message']:
-                  print("Creating Provision EC2 stack:" + os.environ['vProvEC2CfnStackName'])
+                  print("Creating Provision-EC2 stack:" + os.environ['vProvEC2CfnStackName'])
                   cf_client.create_stack(
                       StackName = os.environ['vProvEC2CfnStackName'],
                       TemplateURL = os.environ['vProvEC2CfnTemplateName'],
@@ -149,7 +148,7 @@ Resources:
                 print("Stack already existed:" + os.environ['vDecommEC2CfnStackName'])      
             except botocore.exceptions.ClientError as e:
                 if 'does not exist' in e.response['Error']['Message']:
-                  print("Creating Decommision EC2 stack:" + os.environ['vDecommEC2CfnStackName'])
+                  print("Creating Decommision-EC2 stack:" + os.environ['vDecommEC2CfnStackName'])
                   cf_client.create_stack(
                       StackName = os.environ['vDecommEC2CfnStackName'],
                       TemplateURL = os.environ['vDecommEC2CfnTemplateName'],

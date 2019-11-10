@@ -1,65 +1,13 @@
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/walkthrough-custom-resources-lambda-lookup-amiids.htmls
+
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
-  AWS CloudFormation Windows AMI Lookup Example Template: Demonstrates how to
-  dynamically get the most recent Windows AMI ID. This template provisions an
-  EC2 instance with an AMI ID that is based on the selected instance type and
-  Windows OS version. **WARNING** This template creates an Amazon EC2 instance.
-  You will be billed for the AWS resources used if you create a stack from this
-  template.
 
 Parameters:
   InstanceType:
     Description: EC2 instance type
     Type: String
     Default: t2.small
-    AllowedValues:
-      - t1.micro
-      - t2.micro
-      - t2.small
-      - t2.medium
-      - m1.small
-      - m1.medium
-      - m1.large
-      - m1.xlarge
-      - m2.xlarge
-      - m2.2xlarge
-      - m2.4xlarge
-      - m3.medium
-      - m3.large
-      - m3.xlarge
-      - m3.2xlarge
-      - c1.medium
-      - c1.xlarge
-      - c3.large
-      - c3.xlarge
-      - c3.2xlarge
-      - c3.4xlarge
-      - c3.8xlarge
-      - c4.large
-      - c4.xlarge
-      - c4.2xlarge
-      - c4.4xlarge
-      - c4.8xlarge
-      - g2.2xlarge
-      - r3.large
-      - r3.xlarge
-      - r3.2xlarge
-      - r3.4xlarge
-      - r3.8xlarge
-      - i2.xlarge
-      - i2.2xlarge
-      - i2.4xlarge
-      - i2.8xlarge
-      - d2.xlarge
-      - d2.2xlarge
-      - d2.4xlarge
-      - d2.8xlarge
-      - hi1.4xlarge
-      - hs1.8xlarge
-      - cr1.8xlarge
-      - cc2.8xlarge
-      - cg1.4xlarge
-    ConstraintDescription: Must be a valid EC2 instance type.
   WindowsVersion:
     Description: Windows Version
     Type: String
@@ -69,15 +17,15 @@ Parameters:
       - Microsoft Windows Server 2016 Base
     ConstraintDescription: Must be a valid Windows version.
   ModuleName:
-    Description: The name of the JavaScript file
+    Description: The name of the Lambda NodeJS file
     Type: String
     Default: amilookup-win
   S3Bucket:
-    Description: The name of the bucket that contains your packaged source
+    Description: The name of the bucket for the Lambda
     Type: String
     Default: 318-auto-deploy
   S3Key:
-    Description: The name of the ZIP package
+    Description: The name of the Lambda ZIP file
     Type: String
     Default: amilookup-win.zip
 
@@ -118,8 +66,8 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      RetentionInDays: 1
       LogGroupName: !Sub /aws/lambda/${AMIInfoFunction}
+      RetentionInDays: 1
 
   LambdaExecutionRole:
     Type: 'AWS::IAM::Role'
@@ -135,7 +83,7 @@ Resources:
               - 'sts:AssumeRole'
       Path: /
       Policies:
-        - PolicyName: root
+        - PolicyName: ami_lookup_lambda_policy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -149,10 +97,3 @@ Resources:
                 Action:
                   - ec2:DescribeImages
                 Resource: '*'
-
-Outputs:
-  AMIID:
-    Description: The Amazon EC2 instance AMI ID.
-    Value: !GetAtt 
-      - AMIInfo
-      - Id
