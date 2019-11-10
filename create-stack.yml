@@ -30,7 +30,7 @@ Parameters:
   CfnStackS3BucketName:
     Description: Name of the S3 bucket for the CloudFormation templates
     Type: String
-    Default: http://s3.amazonaws.com/318-auto-deploy
+    Default: 318-auto-deploy
 
 Resources:
   LambdaExecutionRole:
@@ -113,9 +113,9 @@ Resources:
       Environment:
         Variables:
           vProvEC2CfnStackName: !Ref ProvEC2CfnStackName
-          vProvEC2CfnTemplateName: !Join ['/', [!Ref CfnStackS3BucketName, !Ref ProvEC2CfnTemplateName]]
+          vProvEC2CfnTemplateName: !Join ['/', ["https://s3.amazonaws.com", !Ref CfnStackS3BucketName, !Ref ProvEC2CfnTemplateName]]
           vDecommEC2CfnStackName: !Ref DecommEC2CfnStackName
-          vDecommEC2CfnTemplateName: !Join ['/', [!Ref CfnStackS3BucketName, !Ref DecommEC2CfnTemplateName]]
+          vDecommEC2CfnTemplateName: !Join ['/', ["https://s3.amazonaws.com", !Ref CfnStackS3BucketName, !Ref DecommEC2CfnTemplateName]]
           vDecommCronSchedule: !Ref DecommCronSchedule
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
