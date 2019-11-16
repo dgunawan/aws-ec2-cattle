@@ -28,15 +28,32 @@ Parameters:
     Description: The name of the Lambda ZIP file
     Type: String
     Default: amilookup-win.zip
+  KMSKeyArn:
+    Description: Arn of the KMS key used to encrypt disks
+    Type: String
 
 Resources:
   SampleInstance:
     Type: 'AWS::EC2::Instance'
     Properties:
+      AvailabilityZone: us-east-1a
       InstanceType: !Ref InstanceType
       ImageId: !GetAtt 
         - AMIInfo
         - Id
+  
+  # add a volume
+  InstanceVolume2:
+    Type: AWS::EC2::Volume
+    Properties:
+      Size: 10
+      Encrypted: True
+      VolumeType: gp2
+      Tags:
+        - Key: Name
+          Value: test
+      KmsKeyId: !Ref KMSKeyArn # arn:aws:kms:us-east-1:160701069685:key/b4eac4dd-4c1d-47b3-bd72-0a996818be9e
+      AvailabilityZone: us-east-1a
 
   AMIInfo:
     Type: 'Custom::AMIInfo'
@@ -46,7 +63,14 @@ Resources:
         - Arn
       Region: !Ref 'AWS::Region'
       OSName: !Ref WindowsVersion
-      
+
+  AttachVol2:
+      Type: 'AWS::EC2::VolumeAttachment'
+      Properties:
+        InstanceId: !Ref SampleInstance
+        VolumeId: !Ref InstanceVolume2
+        Device: /dev/xvdf    
+
   AMIInfoFunction:
     Type: 'AWS::Lambda::Function'
     Properties:

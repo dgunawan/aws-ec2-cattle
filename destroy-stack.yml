@@ -23,7 +23,7 @@ Resources:
           - sts:AssumeRole
       Path: "/"
       Policies:
-      - PolicyName: root
+      - PolicyName: decomm_ec2_lambda_policy
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -57,6 +57,9 @@ Resources:
             Action:
               - ec2:TerminateInstances
               - ec2:DescribeInstances 
+              - ec2:DeleteVolume
+              - ec2:DetachVolume
+              - ec2:DescribeVolumes
             Resource: "*"
 
           - Effect: Allow

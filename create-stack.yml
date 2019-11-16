@@ -31,6 +31,10 @@ Parameters:
     Description: Name of the S3 bucket for the CloudFormation templates
     Type: String
     Default: 318-auto-deploy
+  KMSKeyArn:
+    Description: Arn of the KMS key used to encrypt disks
+    Type: String
+    Default: arn:aws:kms:us-east-1:160701069685:key/b4eac4dd-4c1d-47b3-bd72-0a996818be9e
 
 Resources:
   LambdaExecutionRole:
@@ -53,7 +57,7 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
-              - logs:CreateLogGroup
+              - logs:CreateLogGroup 
               - logs:CreateLogStream
               - logs:PutLogEvents
               - logs:DescribeLogGroups
@@ -74,21 +78,21 @@ Resources:
               - iam:DeleteRolePolicy
               - iam:DeleteRole
               - iam:PutRolePolicy
-              - iam:GetRolePolicy
               - iam:GetRole
+              - iam:GetRolePolicy
               - iam:PassRole
             Resource: "*"
           
           - Effect: Allow
             Action: 
               - lambda:*
-            Resource: "*"
+            Resource: "*" 
 
           - Effect: Allow
             Action:
               - s3:ListBucket
               - s3:GetObject
-            Resource: arn:aws:s3:::*
+            Resource: !Join ["", ["arn:aws:s3:::", !Ref CfnStackS3BucketName, "/*"]] # restrict this to the right bucket
 
           - Effect: Allow
             Action:
@@ -104,6 +108,23 @@ Resources:
               - ec2:TerminateInstances
               - ec2:DescribeInstances 
               - ec2:RunInstances 
+              - ec2:CreateVolume
+              - ec2:DescribeVolumes
+              - ec2:CreateTags
+              - ec2:AttachVolume
+              - ec2:DeleteVolume
+              - ec2:ModifyVolume
+              - ec2:ModifyVolumeAttribute
+            Resource: "*"
+
+          - Effect: Allow
+            Action:
+              - kms:DescribeKey
+              - kms:Decrypt
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+              - kms:CreateGrant
             Resource: "*"
 
   ManageEC2Lambda:
@@ -117,6 +138,7 @@ Resources:
           vDecommEC2CfnStackName: !Ref DecommEC2CfnStackName
           vDecommEC2CfnTemplateName: !Join ['/', ["https://s3.amazonaws.com", !Ref CfnStackS3BucketName, !Ref DecommEC2CfnTemplateName]]
           vDecommCronSchedule: !Ref DecommCronSchedule
+          vKMSKeyArn: !Ref KMSKeyArn
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -140,7 +162,16 @@ Resources:
                   cf_client.create_stack(
                       StackName = os.environ['vProvEC2CfnStackName'],
                       TemplateURL = os.environ['vProvEC2CfnTemplateName'],
-                      Capabilities = ['CAPABILITY_IAM']
+                      Capabilities = ['CAPABILITY_IAM'],
+                      Parameters=
+                      [
+                        {
+                            'ParameterKey': 'KMSKeyArn',
+                            'ParameterValue': os.environ['vKMSKeyArn'],
+                            'UsePreviousValue': False,
+                            'ResolvedValue': 'string'
+                        },
+                      ]
                   )
 
             try:
