@@ -15,26 +15,10 @@ Parameters:
     Description: Name of the EC2 Cfn template for provisioning the EC2 instance
     Type: String
     Default: LambdaAMILookupSample-win.yml
-  DecommEC2CfnStackName:
-    Description: Name of the EC2 Cfn stack for decommisioning the EC2 instance
-    Type: String
-    Default: decomm-ec2-stack
-  DecommEC2CfnTemplateName:
-    Description: Name of the EC2 Cfn template for decommisioning the EC2 instance
-    Type: String
-    Default: destroy-stack.yml
-  DecommCronSchedule:
-    Description: Schedule for the delete-lambda
-    Type: String
-    Default: cron(0/20 * * * ? *)
   CfnStackS3BucketName:
     Description: Name of the S3 bucket for the CloudFormation templates
     Type: String
     Default: 318-auto-deploy
-  KMSKeyArn:
-    Description: Arn of the KMS key used to encrypt disks
-    Type: String
-    Default: arn:aws:kms:us-east-1:160701069685:key/b4eac4dd-4c1d-47b3-bd72-0a996818be9e
 
 Resources:
   LambdaExecutionRole:
@@ -85,14 +69,18 @@ Resources:
           
           - Effect: Allow
             Action: 
-              - lambda:*
+              - lambda:RemovePermission
+              - lambda:InvokeFunction
+              - lambda:DeleteFunction
+              - lambda:CreateFunction 
+              - lambda:GetFunctionConfiguration
             Resource: "*" 
 
           - Effect: Allow
             Action:
               - s3:ListBucket
               - s3:GetObject
-            Resource: !Join ["", ["arn:aws:s3:::", !Ref CfnStackS3BucketName, "/*"]] # restrict this to the right bucket
+            Resource: !Join ["", ["arn:aws:s3:::", !Ref CfnStackS3BucketName, "/*"]]
 
           - Effect: Allow
             Action:
@@ -109,6 +97,7 @@ Resources:
               - ec2:DescribeInstances 
               - ec2:RunInstances 
               - ec2:CreateVolume
+              - ec2:DetachVolume
               - ec2:DescribeVolumes
               - ec2:CreateTags
               - ec2:AttachVolume
@@ -127,7 +116,9 @@ Resources:
               - kms:CreateGrant
             Resource: "*"
 
-  ManageEC2Lambda:
+  ####### Provision EC2 Lambda #######
+
+  ProvisionEC2Lambda:
     Type: AWS::Lambda::Function
     Properties:
       Runtime: python3.6
@@ -135,10 +126,6 @@ Resources:
         Variables:
           vProvEC2CfnStackName: !Ref ProvEC2CfnStackName
           vProvEC2CfnTemplateName: !Join ['/', ["https://s3.amazonaws.com", !Ref CfnStackS3BucketName, !Ref ProvEC2CfnTemplateName]]
-          vDecommEC2CfnStackName: !Ref DecommEC2CfnStackName
-          vDecommEC2CfnTemplateName: !Join ['/', ["https://s3.amazonaws.com", !Ref CfnStackS3BucketName, !Ref DecommEC2CfnTemplateName]]
-          vDecommCronSchedule: !Ref DecommCronSchedule
-          vKMSKeyArn: !Ref KMSKeyArn
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -153,82 +140,105 @@ Resources:
           cf_client = boto3.client('cloudformation')
 
           def handler(event, context):
+            EC2Stack = os.environ['vProvEC2CfnStackName']
             try:
-                resp = cf_client.describe_stacks(StackName = os.environ['vProvEC2CfnStackName'])
-                print("Stack already existed:" + os.environ['vProvEC2CfnStackName'])
+              resp = cf_client.describe_stacks(StackName = EC2Stack)
+              print("Stack already existed:" + EC2Stack)
             except botocore.exceptions.ClientError as e:
-                if 'does not exist' in e.response['Error']['Message']:
-                  print("Creating Provision-EC2 stack:" + os.environ['vProvEC2CfnStackName'])
-                  cf_client.create_stack(
-                      StackName = os.environ['vProvEC2CfnStackName'],
-                      TemplateURL = os.environ['vProvEC2CfnTemplateName'],
-                      Capabilities = ['CAPABILITY_IAM'],
-                      Parameters=
-                      [
-                        {
-                            'ParameterKey': 'KMSKeyArn',
-                            'ParameterValue': os.environ['vKMSKeyArn'],
-                            'UsePreviousValue': False,
-                            'ResolvedValue': 'string'
-                        },
-                      ]
-                  )
-
-            try:
-                resp = cf_client.describe_stacks(StackName = os.environ['vDecommEC2CfnStackName'])
-                print("Stack already existed:" + os.environ['vDecommEC2CfnStackName'])      
-            except botocore.exceptions.ClientError as e:
-                if 'does not exist' in e.response['Error']['Message']:
-                  print("Creating Decommision-EC2 stack:" + os.environ['vDecommEC2CfnStackName'])
-                  cf_client.create_stack(
-                      StackName = os.environ['vDecommEC2CfnStackName'],
-                      TemplateURL = os.environ['vDecommEC2CfnTemplateName'],
-                      Capabilities = ['CAPABILITY_IAM'],
-                      Parameters=
-                      [
-                        {
-                            'ParameterKey': 'TargetStackName',
-                            'ParameterValue': os.environ['vProvEC2CfnStackName'],
-                            'UsePreviousValue': False,
-                            'ResolvedValue': 'string'
-                        },
-                        {
-                            'ParameterKey': 'CronSchedule',
-                            'ParameterValue': os.environ['vDecommCronSchedule'],
-                            'UsePreviousValue': False,
-                            'ResolvedValue': 'string'
-                        },
-                      ]
-                    )
-
-  LogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      RetentionInDays: 1
-      LogGroupName: !Sub /aws/lambda/${ManageEC2Lambda} 
-
-  PermissionForEventsToInvokeLambda: 
+              if 'does not exist' in e.response['Error']['Message']:
+                print("Creating Provision-EC2 stack:" + EC2Stack)
+                cf_client.create_stack(
+                  StackName = EC2Stack,
+                  TemplateURL = os.environ['vProvEC2CfnTemplateName'],
+                  Capabilities = ['CAPABILITY_IAM']
+                )
+  
+  PermissionToInvokeProvLambda: 
     Type: AWS::Lambda::Permission
     Properties: 
       FunctionName: 
-        Ref: "ManageEC2Lambda"
+        Ref: "ProvisionEC2Lambda"
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
       SourceArn: 
         Fn::GetAtt: 
-          - "ManageEC2LambdaRule"
+          - "ProvisionEC2LambdaRule"
           - "Arn"      
           
-  ManageEC2LambdaRule:
+  ProvisionEC2LambdaRule:
     Type: AWS::Events::Rule
     Properties: 
-      Description: "Rule for Lambda that schedules provisioning and decommisioning of EC2"
-      ScheduleExpression: "cron(0/15 * * * ? *)"
+      Description: "Rule for Lambda that schedules provisioning of EC2"
+      ScheduleExpression: "cron(0/10 * * * ? *)"
       State: "ENABLED"
       Targets: 
         - 
           Arn: 
             Fn::GetAtt: 
-              - "ManageEC2Lambda"
+              - "ProvisionEC2Lambda"
               - "Arn"
-          Id: "ManageEC2LambdaV1"    
+          Id: "ProvisionEC2LambdaV1"    
+
+  ####### Decommission EC2 Lambda #######
+
+  DecommissionEC2Lambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.6
+      Environment:
+        Variables:
+          vProvEC2CfnStackName: !Ref ProvEC2CfnStackName
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import logging
+          import botocore
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          cf_client = boto3.client('cloudformation')
+
+          def handler(event, context):
+            EC2Stack = os.environ['vProvEC2CfnStackName']
+            try:
+              cf_client.describe_stacks(StackName = EC2Stack)
+              print("Decommissioning EC2 stack:" + EC2Stack)
+              cf_client.delete_stack(StackName = EC2Stack)
+            except botocore.exceptions.ClientError as e:
+              if 'does not exist' in e.response['Error']['Message']:
+                print("EC2 Stack doesn't exist:" + EC2Stack)
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DecommissionEC2Lambda} 
+      RetentionInDays: 1
+
+  PermissionToInvokeDecommLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Ref: "DecommissionEC2Lambda"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "DecommissionEC2LambdaRule"
+          - "Arn"      
+          
+  DecommissionEC2LambdaRule:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "Rule for Lambda that schedules decommisioning of EC2"
+      ScheduleExpression: "cron(0/10 * * * ? *)"
+      State: "ENABLED"
+      Targets: 
+        - 
+          Arn: 
+            Fn::GetAtt: 
+              - "DecommissionEC2Lambda"
+              - "Arn"
+          Id: "DecommissionEC2LambdaV1"    

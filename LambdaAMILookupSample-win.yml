@@ -31,6 +31,7 @@ Parameters:
   KMSKeyArn:
     Description: Arn of the KMS key used to encrypt disks
     Type: String
+    Default: arn:aws:kms:us-east-1:160701069685:key/b4eac4dd-4c1d-47b3-bd72-0a996818be9e
 
 Resources:
   SampleInstance:
