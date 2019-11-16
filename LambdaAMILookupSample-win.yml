@@ -52,7 +52,7 @@ Resources:
       Tags:
         - Key: Name
           Value: test
-      KmsKeyId: !Ref KMSKeyArn # arn:aws:kms:us-east-1:160701069685:key/b4eac4dd-4c1d-47b3-bd72-0a996818be9e
+      KmsKeyId: !Ref KMSKeyArn 
       AvailabilityZone: us-east-1a
 
   AMIInfo:
