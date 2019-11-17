@@ -152,6 +152,7 @@ Resources:
                   TemplateURL = os.environ['vProvEC2CfnTemplateName'],
                   Capabilities = ['CAPABILITY_IAM']
                 )
+      Timeout: 500
   
   PermissionToInvokeProvLambda: 
     Type: AWS::Lambda::Permission
@@ -210,6 +211,7 @@ Resources:
             except botocore.exceptions.ClientError as e:
               if 'does not exist' in e.response['Error']['Message']:
                 print("EC2 Stack doesn't exist:" + EC2Stack)
+      Timeout: 500  
 
   LogGroup:
     Type: AWS::Logs::LogGroup
